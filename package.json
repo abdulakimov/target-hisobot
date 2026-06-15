@@ -1,0 +1,21 @@
+{
+  "name": "hisobotchi",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hisobotchi — multi-tenant SaaS: Telegram bot that sends scheduled Meta ad reports to client groups",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.6.0",
+  "scripts": {
+    "dev": "pnpm run --parallel --filter \"./apps/*\" dev",
+    "dev:api": "pnpm --filter @hisobotchi/api dev",
+    "dev:web": "pnpm --filter @hisobotchi/web dev",
+    "build": "pnpm -r build",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "prisma:migrate": "pnpm --filter @hisobotchi/api prisma:migrate",
+    "prisma:generate": "pnpm --filter @hisobotchi/api prisma:generate",
+    "prisma:studio": "pnpm --filter @hisobotchi/api prisma:studio"
+  }
+}

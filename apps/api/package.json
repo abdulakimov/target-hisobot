@@ -1,0 +1,51 @@
+{
+  "name": "@hisobotchi/api",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "prebuild": "pnpm --filter @hisobotchi/shared build && prisma generate",
+    "build": "nest build",
+    "predev": "pnpm --filter @hisobotchi/shared build && prisma generate",
+    "dev": "nest start --watch",
+    "start": "node dist/main",
+    "start:prod": "node dist/main",
+    "lint": "tsc --noEmit -p tsconfig.json",
+    "test": "echo \"(no api tests yet)\" && exit 0",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@hisobotchi/shared": "workspace:*",
+    "@nestjs/common": "11.1.26",
+    "@nestjs/config": "4.0.4",
+    "@nestjs/core": "11.1.26",
+    "@nestjs/platform-express": "11.1.26",
+    "@nestjs/schedule": "6.1.3",
+    "@prisma/adapter-pg": "7.8.0",
+    "@prisma/client": "7.8.0",
+    "class-transformer": "0.5.1",
+    "class-validator": "0.15.1",
+    "cookie-parser": "1.4.7",
+    "grammy": "1.43.0",
+    "pg": "8.21.0",
+    "reflect-metadata": "0.2.2",
+    "rxjs": "7.8.2",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "11.0.23",
+    "@nestjs/testing": "11.1.26",
+    "@types/cookie-parser": "1.4.10",
+    "@types/express": "5.0.6",
+    "@types/node": "25.9.3",
+    "@types/pg": "8.20.0",
+    "dotenv": "17.4.2",
+    "prisma": "7.8.0",
+    "typescript": "6.0.3"
+  }
+}

@@ -1,0 +1,11 @@
+# Local run without Caddy/TLS — single origin on :3000.
+# The web (nginx) container serves the SPA and proxies API paths to the api container.
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.local.yml up -d --build postgres api web
+#   App → http://localhost:3000
+services:
+  web:
+    ports:
+      - "3000:80"
+    depends_on:
+      - api

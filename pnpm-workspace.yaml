@@ -1,0 +1,11 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm 10+ blocks dependency lifecycle (postinstall) scripts by default.
+# Allow only the dependencies we trust to run build scripts.
+allowBuilds:
+  prisma: true
+  '@prisma/engines': true
+  '@prisma/client': true
+  esbuild: true

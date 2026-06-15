@@ -1,0 +1,220 @@
+// Hisobotchi data model — see PLAN.md §3.
+// All tenant-scoped entities carry user_id; every query must filter by it.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  // Prisma 7: connection URL lives in prisma.config.ts (CLI/Migrate) and the
+  // PrismaClient is constructed with a driver adapter (@prisma/adapter-pg) at runtime.
+  provider = "postgresql"
+}
+
+enum MetaConnectionStatus {
+  active
+  expired
+  revoked
+}
+
+enum BotStatus {
+  member
+  admin
+  removed
+}
+
+enum ReportRunStatus {
+  success
+  failed
+}
+
+enum WindowPreset {
+  yesterday
+  today
+  last_7d
+  last_30d
+  this_month
+}
+
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  telegramUserId BigInt    @unique @map("telegram_user_id")
+  username       String?
+  firstName      String?   @map("first_name")
+  lastName       String?   @map("last_name")
+  photoUrl       String?   @map("photo_url")
+  timezone       String    @default("Asia/Tashkent")
+  dmEnabled      Boolean   @default(false) @map("dm_enabled")
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastLoginAt    DateTime? @map("last_login_at") @db.Timestamptz(6)
+
+  sessions        Session[]
+  metaConnections MetaConnection[]
+  adAccounts      AdAccount[]
+  telegramGroups  TelegramGroup[]
+  pairingTokens   GroupPairingToken[]
+  loginTokens     LoginToken[]
+  reports         Report[]
+  reportRuns      ReportRun[]
+
+  @@map("users")
+}
+
+model Session {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  tokenHash  String   @unique @map("token_hash")
+  userAgent  String?  @map("user_agent")
+  ip         String?
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  lastSeenAt DateTime @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model MetaConnection {
+  id             String               @id @default(uuid()) @db.Uuid
+  userId         String               @map("user_id") @db.Uuid
+  metaUserId     String               @map("meta_user_id")
+  accessTokenEnc Bytes                @map("access_token_enc")
+  tokenExpiresAt DateTime?            @map("token_expires_at") @db.Timestamptz(6)
+  scopes         String[]
+  status         MetaConnectionStatus @default(active)
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adAccounts AdAccount[]
+
+  @@index([userId])
+  @@map("meta_connections")
+}
+
+model AdAccount {
+  id                    String   @id @default(uuid()) @db.Uuid
+  userId                String   @map("user_id") @db.Uuid
+  metaConnectionId      String   @map("meta_connection_id") @db.Uuid
+  actId                 String   @map("act_id")
+  name                  String
+  currency              String
+  accountTimezone       String   @map("account_timezone")
+  status                String
+  defaultLeadActionType String?  @map("default_lead_action_type")
+  enabled               Boolean  @default(false)
+  createdAt             DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  metaConnection MetaConnection @relation(fields: [metaConnectionId], references: [id], onDelete: Cascade)
+  reports        Report[]
+
+  @@unique([userId, actId])
+  @@index([userId])
+  @@index([metaConnectionId])
+  @@map("ad_accounts")
+}
+
+model TelegramGroup {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  chatId    BigInt    @map("chat_id")
+  title     String
+  chatType  String    @map("chat_type")
+  botStatus BotStatus @default(member) @map("bot_status")
+  linkedAt  DateTime? @map("linked_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  reports Report[]
+
+  @@unique([userId, chatId])
+  @@index([userId])
+  @@map("telegram_groups")
+}
+
+// One-time token for the bot deep-link login flow (M1).
+// pending → claimed (bot /start) → consumed (browser poll exchanges it for a session).
+model LoginToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  token     String    @unique
+  userId    String?   @map("user_id") @db.Uuid
+  status    String    @default("pending")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  claimedAt DateTime? @map("claimed_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([expiresAt])
+  @@map("login_tokens")
+}
+
+model GroupPairingToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  used      Boolean  @default(false)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("group_pairing_tokens")
+}
+
+// Central entity: binds one AdAccount to one TelegramGroup with metrics + schedule.
+model Report {
+  id              String       @id @default(uuid()) @db.Uuid
+  userId          String       @map("user_id") @db.Uuid
+  adAccountId     String       @map("ad_account_id") @db.Uuid
+  telegramGroupId String       @map("telegram_group_id") @db.Uuid
+  name            String?
+  metrics         String[]
+  leadActionType  String?      @map("lead_action_type")
+  windowPreset    WindowPreset @map("window_preset")
+  timezone        String       @default("Asia/Tashkent")
+  sendTimes       Json         @map("send_times")
+  weekdays        Int[]
+  enabled         Boolean      @default(true)
+  lastRunAt       DateTime?    @map("last_run_at") @db.Timestamptz(6)
+  createdAt       DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  adAccount     AdAccount     @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  telegramGroup TelegramGroup @relation(fields: [telegramGroupId], references: [id], onDelete: Cascade)
+  runs          ReportRun[]
+
+  @@index([userId])
+  @@index([enabled])
+  @@map("reports")
+}
+
+model ReportRun {
+  id                String          @id @default(uuid()) @db.Uuid
+  reportId          String          @map("report_id") @db.Uuid
+  userId            String          @map("user_id") @db.Uuid
+  scheduledFor      DateTime        @map("scheduled_for") @db.Timestamptz(6)
+  ranAt             DateTime?       @map("ran_at") @db.Timestamptz(6)
+  status            ReportRunStatus
+  windowStart       DateTime?       @map("window_start") @db.Timestamptz(6)
+  windowEnd         DateTime?       @map("window_end") @db.Timestamptz(6)
+  metricsSnapshot   Json?           @map("metrics_snapshot")
+  errorCode         String?         @map("error_code")
+  errorMessage      String?         @map("error_message")
+  telegramMessageId BigInt?         @map("telegram_message_id")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, scheduledFor])
+  @@index([userId])
+  @@index([reportId])
+  @@map("report_runs")
+}

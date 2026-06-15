@@ -1,0 +1,19 @@
+# Replace example.com with your domain. Caddy auto-provisions HTTPS.
+{$APP_DOMAIN:localhost} {
+	encode gzip
+
+	# API + Telegram bot + scheduler (NestJS). All REST routes are under /api
+	# (NestJS global prefix); /health is top-level for infra checks.
+	@api {
+		path /api/* /health
+	}
+	handle @api {
+		reverse_proxy api:3000
+	}
+
+	# Everything else → web SPA (static). Client routes like /groups, /reports
+	# are owned by the SPA.
+	handle {
+		reverse_proxy web:80
+	}
+}
