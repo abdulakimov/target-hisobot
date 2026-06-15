@@ -9,6 +9,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { MetaModule } from './modules/meta/meta.module';
 import { TelegramModule } from './modules/telegram/telegram.module';
+import { GroupsModule } from './modules/groups/groups.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { ReportRunsModule } from './modules/report-runs/report-runs.module';
@@ -28,6 +29,7 @@ import { ReportRunsModule } from './modules/report-runs/report-runs.module';
     UsersModule,
     AuthModule,
     MetaModule,
+    GroupsModule,
     ReportsModule,
     ReportRunsModule,
   ],

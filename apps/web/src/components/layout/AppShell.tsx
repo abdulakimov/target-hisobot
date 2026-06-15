@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/providers/auth-provider';
+import { ReportEditorProvider, useReportEditor } from '@/providers/report-editor-provider';
 
 const NAV = [
   { to: '/', label: 'Hisobotlar', icon: BarChart3, end: true },
@@ -74,8 +75,17 @@ function DmBanner() {
 }
 
 export function AppShell() {
+  return (
+    <ReportEditorProvider>
+      <AppShellLayout />
+    </ReportEditorProvider>
+  );
+}
+
+function AppShellLayout() {
   const { pathname } = useLocation();
   const { user, logout } = useAuth();
+  const { openEditor } = useReportEditor();
   const title = TITLES[pathname] ?? 'Hisobotchi';
   const initial = (user?.firstName ?? user?.username ?? '?').charAt(0).toUpperCase();
 
@@ -114,7 +124,7 @@ export function AppShell() {
         <header className="flex h-14 items-center justify-between border-b border-border px-6">
           <h1 className="text-lg font-semibold">{title}</h1>
           <div className="flex items-center gap-2">
-            <Button size="sm">
+            <Button size="sm" onClick={() => openEditor()}>
               <Plus />
               Yangi hisobot
             </Button>

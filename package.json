@@ -13,9 +13,13 @@
     "dev:web": "pnpm --filter @hisobotchi/web dev",
     "build": "pnpm -r build",
     "lint": "pnpm -r lint",
-    "test": "pnpm -r test",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prisma:migrate": "pnpm --filter @hisobotchi/api prisma:migrate",
     "prisma:generate": "pnpm --filter @hisobotchi/api prisma:generate",
     "prisma:studio": "pnpm --filter @hisobotchi/api prisma:studio"
+  },
+  "devDependencies": {
+    "vitest": "^3.2.4"
   }
 }

@@ -1,14 +1,18 @@
 import { Injectable, Logger, OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Bot } from 'grammy';
+import type { BotStatus } from '@prisma/client';
 import type { AppConfig } from '../common/config/env.validation';
 import { UsersService } from '../users/users.service';
 import { LOGIN_PAYLOAD_PREFIX, LoginTokenService } from '../auth/login-token.service';
+import { GroupsService } from '../groups/groups.service';
+import { mapBotStatus } from '../groups/bot-status';
 
 /**
  * grammY long-polling bot. Boots only if TELEGRAM_BOT_TOKEN is set.
- * M1: private /start handles bot deep-link login (login_<token>) and DM enablement.
- * Group pairing (/start <token> in groups) + my_chat_member land in M3.
+ * - Private /start: bot deep-link login (login_<token>) + DM enablement (M1).
+ * - Group /start <token>: pairing — binds the group to the token's user (M3).
+ * - my_chat_member: tracks add/remove/admin; DMs the owner on removal (M3).
  */
 @Injectable()
 export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
@@ -19,6 +23,7 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
     private readonly config: ConfigService<AppConfig, true>,
     private readonly users: UsersService,
     private readonly loginTokens: LoginTokenService,
+    private readonly groups: GroupsService,
   ) {}
 
   onModuleInit(): void {
@@ -47,11 +52,34 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
 
   private registerHandlers(bot: Bot): void {
     bot.command('start', async (ctx) => {
-      // Group pairing (/start <token> in groups) is handled in M3.
-      if (ctx.chat?.type !== 'private') {
+      const payload = (ctx.match ?? '').toString().trim();
+      const chat = ctx.chat;
+
+      // Group pairing: /start <token> when the bot is added via a startgroup deep link.
+      if (chat && (chat.type === 'group' || chat.type === 'supergroup')) {
+        if (!payload) return;
+        let botStatus: BotStatus = 'member';
+        try {
+          const me = await ctx.getChatMember(ctx.me.id);
+          botStatus = me.status === 'administrator' || me.status === 'creator' ? 'admin' : 'member';
+        } catch {
+          /* keep default 'member' */
+        }
+        const result = await this.groups.claimPairing(payload, {
+          chatId: BigInt(chat.id),
+          title: chat.title ?? 'Guruh',
+          chatType: chat.type,
+          botStatus,
+        });
+        await ctx.reply(
+          result.ok
+            ? '✅ Bu guruh hisobotchingizga ulandi.\n\nBelgilangan vaqtlarda shu yerga hisobotlar yuboriladi.'
+            : '❌ Ulanish havolasi eskirgan yoki yaroqsiz.\nDashboarddan "Guruhni ulash"ni qayta bosing.',
+        );
         return;
       }
-      const payload = (ctx.match ?? '').toString().trim();
+
+      if (!chat || chat.type !== 'private') return;
       const telegramId = ctx.from?.id;
 
       // Bot deep-link login: /start login_<token>
@@ -63,15 +91,11 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
           last_name: ctx.from?.last_name,
           username: ctx.from?.username,
         });
-        if (ok) {
-          await ctx.reply(
-            '✅ Tizimga muvaffaqiyatli kirdingiz!\n\nSaytga qaytishingiz mumkin — avtomatik kiriladi.',
-          );
-        } else {
-          await ctx.reply(
-            '❌ Login havolasi eskirgan yoki yaroqsiz.\nSaytda "Telegram" tugmasini qayta bosing.',
-          );
-        }
+        await ctx.reply(
+          ok
+            ? '✅ Tizimga muvaffaqiyatli kirdingiz!\n\nSaytga qaytishingiz mumkin — avtomatik kiriladi.'
+            : '❌ Login havolasi eskirgan yoki yaroqsiz.\nSaytda "Telegram" tugmasini qayta bosing.',
+        );
         return;
       }
 
@@ -82,17 +106,33 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
         return;
       }
       const linked = await this.users.setDmEnabled(BigInt(telegramId), true);
-      if (linked) {
-        await ctx.reply(
-          'Salom! Bildirishnomalar yoqildi ✅\n\n' +
-            'Endi men sizga hisobotlar va xatolik ogohlantirishlarini shu yerga yuboraman.\n\n' +
-            `Dashboard: ${dashboardUrl}`,
-        );
-      } else {
-        await ctx.reply(
-          'Salom! Hisobotchi botiga xush kelibsiz.\n\n' +
-            `Tizimga kirish uchun saytga o'ting va "Telegram" tugmasini bosing: ${dashboardUrl}`,
-        );
+      await ctx.reply(
+        linked
+          ? 'Salom! Bildirishnomalar yoqildi ✅\n\n' +
+              'Endi men sizga hisobotlar va xatolik ogohlantirishlarini shu yerga yuboraman.\n\n' +
+              `Dashboard: ${dashboardUrl}`
+          : 'Salom! Hisobotchi botiga xush kelibsiz.\n\n' +
+              `Tizimga kirish uchun saytga o'ting va "Telegram" tugmasini bosing: ${dashboardUrl}`,
+      );
+    });
+
+    bot.on('my_chat_member', async (ctx) => {
+      const chat = ctx.chat;
+      if (chat.type !== 'group' && chat.type !== 'supergroup') return;
+      const newStatus = mapBotStatus(ctx.myChatMember.new_chat_member.status);
+      const changes = await this.groups.updateBotStatus(BigInt(chat.id), newStatus);
+      for (const change of changes) {
+        if (change.newStatus === 'removed' && change.previousStatus !== 'removed') {
+          try {
+            await ctx.api.sendMessage(
+              Number(change.ownerTelegramUserId),
+              `⚠️ "${change.group.title}" guruhidan chiqarildim — unga endi hisobotlar yuborilmaydi.\n\n` +
+                'Qayta ulash uchun dashboarddan "Guruhni ulash" tugmasini bosing.',
+            );
+          } catch (err) {
+            this.logger.warn(`Failed to DM owner about group removal: ${String(err)}`);
+          }
+        }
       }
     });
   }
