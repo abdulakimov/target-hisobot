@@ -10,6 +10,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { LoginPage } from '@/routes/login';
 import { DashboardPage } from '@/routes/dashboard';
 import { GroupsPage } from '@/routes/groups';
+import { ConnectionsPage } from '@/routes/connections';
 import { HistoryPage } from '@/routes/history';
 import { PlaceholderPage } from '@/routes/placeholder';
 import '@/index.css';
@@ -26,7 +27,7 @@ const router = createBrowserRouter([
         children: [
           { path: '/', element: <DashboardPage /> },
           { path: '/groups', element: <GroupsPage /> },
-          { path: '/connections', element: <PlaceholderPage title="Ulanishlar" /> },
+          { path: '/connections', element: <ConnectionsPage /> },
           { path: '/history', element: <HistoryPage /> },
           { path: '/settings', element: <PlaceholderPage title="Sozlamalar" /> },
         ],
