@@ -57,3 +57,21 @@ export function classifySendError(error: unknown): SendFailure {
     description: error instanceof Error ? error.message : String(error),
   };
 }
+
+/** Uzbek, user-facing message for a send-failure kind (report-run errors + DM alerts). */
+export function humanizeSendError(kind: SendErrorKind, description: string): string {
+  switch (kind) {
+    case 'forbidden':
+      return 'Bot guruhdan chiqarilgan yoki bloklangan.';
+    case 'chat_not_found':
+      return 'Guruh topilmadi.';
+    case 'migrated':
+      return "Guruh superguruhga o'zgargan — qayta ulang.";
+    case 'rate_limited':
+      return "Juda ko'p so'rov — birozdan keyin urinib ko'ring.";
+    case 'network':
+      return 'Tarmoq xatosi.';
+    default:
+      return description || "Noma'lum xato.";
+  }
+}

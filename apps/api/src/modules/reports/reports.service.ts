@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  formatUzDateTime,
   LEAD_DEPENDENT_METRICS,
   renderReportMessage,
   type CreateReportInput,
@@ -12,7 +13,7 @@ import {
 } from '@hisobotchi/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { TelegramSenderService } from '../telegram/telegram-sender.service';
-import type { SendErrorKind } from '../telegram/send-error';
+import { humanizeSendError } from '../telegram/send-error';
 import { toGroupResponse } from '../groups/group.mapper';
 import { ReportRunsService } from '../report-runs/report-runs.service';
 import { buildFailureDmMessage } from '../report-runs/failure-dm';
@@ -112,7 +113,7 @@ export class ReportsService {
 
   /**
    * Send a sample report to the group now to verify delivery + format before Meta is wired.
-   * Records a ReportRun (M6) and DMs the owner on failure — the same path M5 will reuse.
+   * Records a ReportRun (M6) and DMs the owner on failure — the same path M5 reuses.
    */
   async testSend(userId: string, id: string): Promise<TestSendResponse> {
     const report = await this.getEntity(userId, id);
@@ -183,7 +184,7 @@ export class ReportsService {
   }
 }
 
-/** Sample metric values for the test send (real numbers come from Meta in M5). */
+/** Sample metric values for the test send (real numbers come from Meta in the scheduler). */
 const SAMPLE_VALUES: Record<MetricKey, number> = {
   ad_spend: 1250000,
   cost_per_lead: 36764,
@@ -208,37 +209,10 @@ function buildSampleMessage(
     accountName: report.adAccount.name,
     windowPreset: report.windowPreset,
     dateRange: 'namunaviy davr',
-    sentAt: formatLocal(new Date(), report.timezone),
+    sentAt: formatUzDateTime(new Date(), report.timezone),
     currency: report.adAccount.currency,
     metrics,
     values,
   });
   return `🧪 <b>Sinov xabari</b> — namunaviy ma'lumotlar, haqiqiy hisobot emas.\n\n${body}`;
-}
-
-function formatLocal(date: Date, timeZone: string): string {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone,
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
-}
-
-function humanizeSendError(kind: SendErrorKind, description: string): string {
-  switch (kind) {
-    case 'forbidden':
-      return 'Bot guruhdan chiqarilgan yoki bloklangan.';
-    case 'chat_not_found':
-      return 'Guruh topilmadi.';
-    case 'migrated':
-      return "Guruh superguruhga o'zgargan — qayta ulang.";
-    case 'rate_limited':
-      return "Juda ko'p so'rov — birozdan keyin urinib ko'ring.";
-    case 'network':
-      return 'Tarmoq xatosi.';
-    default:
-      return description || "Noma'lum xato.";
-  }
 }

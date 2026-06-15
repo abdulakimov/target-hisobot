@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { AppConfig } from '../common/config/env.validation';
+import type { RawInsights } from './insights-parse';
 
 export interface MetaTokenResult {
   accessToken: string;
@@ -16,7 +17,7 @@ export interface MetaAdAccountRaw {
   account_status?: number;
 }
 
-/** Low-level Meta Graph API client (OAuth token exchange + ad accounts). */
+/** Low-level Meta Graph API client (OAuth token exchange + ad accounts + insights). */
 @Injectable()
 export class MetaGraphService {
   constructor(private readonly config: ConfigService<AppConfig, true>) {}
@@ -105,5 +106,16 @@ export class MetaGraphService {
       url = paging?.next ?? null;
     }
     return out;
+  }
+
+  /** Account-level insights for a date_preset window (single row, or null if no data). */
+  async getInsights(token: string, actId: string, datePreset: string): Promise<RawInsights | null> {
+    const fields = 'spend,impressions,reach,unique_link_clicks_ctr,actions,cost_per_action_type';
+    const url = this.graph(
+      `/${actId}/insights?level=account&date_preset=${datePreset}&fields=${fields}&access_token=${encodeURIComponent(token)}`,
+    );
+    const data = await this.getJson(url, 'insights');
+    const rows = (data.data as RawInsights[] | undefined) ?? [];
+    return rows.length > 0 ? rows[0] : null;
   }
 }
