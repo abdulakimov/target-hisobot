@@ -9,6 +9,7 @@ import { RequireAuth } from '@/components/RequireAuth';
 import { AppShell } from '@/components/layout/AppShell';
 import { LoginPage } from '@/routes/login';
 import { DashboardPage } from '@/routes/dashboard';
+import { ConnectionsPage } from '@/routes/connections';
 import { PlaceholderPage } from '@/routes/placeholder';
 import '@/index.css';
 
@@ -24,7 +25,7 @@ const router = createBrowserRouter([
         children: [
           { path: '/', element: <DashboardPage /> },
           { path: '/groups', element: <PlaceholderPage title="Guruhlar" /> },
-          { path: '/connections', element: <PlaceholderPage title="Ulanishlar" /> },
+          { path: '/connections', element: <ConnectionsPage /> },
           { path: '/history', element: <PlaceholderPage title="Tarix" /> },
           { path: '/settings', element: <PlaceholderPage title="Sozlamalar" /> },
         ],
