@@ -47,12 +47,18 @@ Targetologlar uchun: Meta reklama akkauntini ulab, belgilangan vaqtlarda Telegra
 > **Olib tashlandi:** Telegram Login Widget, `dev-login` bypass, HMAC `hash` verify, `LoginToken` jadvali qo'shildi.
 > Endpoints: `POST /api/auth/telegram/start`, `GET /api/auth/telegram/poll`, `POST /api/auth/logout`, `GET /api/me`.
 
-### M2 — Meta ulash
-- [ ] OAuth boshlash (`ads_read,business_management`, `state`).
-- [ ] Callback: code → short-lived → **long-lived** token → AES-256-GCM shifrlash → saqlash.
-- [ ] `/me/adaccounts` sync → `AdAccount` upsert (default: disabled).
-- [ ] Account yoqish/o'chirish UI; har account uchun default lead `action_type` tanlash.
-- [ ] Token muddati/xatosini aniqlash → `expired` + reconnect.
+### M2 — Meta ulash ✅
+- [x] OAuth boshlash (`ads_read,business_management`, `state`).
+- [x] Callback: code → short-lived → **long-lived** token → AES-256-GCM shifrlash → saqlash.
+- [x] `/me/adaccounts` sync → `AdAccount` upsert (default: disabled).
+- [x] Account yoqish/o'chirish UI; har account uchun default lead `action_type` tanlash.
+- [x] Token muddati/xatosini aniqlash → `expired` + reconnect.
+- [x] **Diagnostika:** OAuth/sync xatosida Meta'ning haqiqiy sababi (FB error code/subcode) frontendga `?reason=` orqali uzatiladi; sync xatosi ulanishni buzmaydi (`handleCallback` partial-success qaytaradi).
+- [x] **Manual sync:** `POST /api/meta/sync` + "Yangilash" tugmasi (qayta OAuth qilmasdan).
+- [x] **Proaktiv token refresh:** `MetaMaintenanceService` kunlik cron (03:00) — tugashga ~10 kun qolganda long-lived tokenni qayta almashtiradi; tugagan/yangilanmagan bo'lsa `expired` + egasiga reconnect DM.
+- [x] **Dinamik lead turlari:** account'da haqiqatan aniqlangan `action_type`'lar (`GET /api/meta/ad-accounts/:id/action-types`) dropdownga qo'shiladi; xom action_type ham saqlanadi va parse qilinadi.
+
+> **⚠️ Jonli OAuth/sync ishlashi konfiguratsiyaga bog'liq** (kod to'liq): (1) prod `.env` `META_OAUTH_REDIRECT_URL` aynan `https://hisobot.qariya.uz/api/meta/callback` bo'lishi (`/api` prefiksi bilan); (2) Meta app **Live** rejimida yoki FB user app'da rol/test-user; (3) `ads_read`/`business_management` Advanced Access tasdiqlanmaguncha faqat rol berilgan akkauntlar `/me/adaccounts` da ko'rinadi. Endi xato sababi UI toast'ida ko'rinadi.
 
 ### M3 — Guruh pairing
 - [ ] "Guruhni ulash" → `startgroup=<pairing_token>` deep-link generatsiya.

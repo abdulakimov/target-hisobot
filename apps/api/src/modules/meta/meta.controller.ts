@@ -6,6 +6,7 @@ import {
   Logger,
   Param,
   Patch,
+  Post,
   Query,
   Req,
   Res,
@@ -14,7 +15,11 @@ import { ConfigService } from '@nestjs/config';
 import type { Request, Response, CookieOptions } from 'express';
 import type { User } from '@prisma/client';
 import { randomBytes } from 'node:crypto';
-import type { MetaStatusResponse } from '@hisobotchi/shared';
+import type {
+  AccountActionTypesResponse,
+  MetaStatusResponse,
+  MetaSyncResponse,
+} from '@hisobotchi/shared';
 import type { AppConfig } from '../common/config/env.validation';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { MetaService } from './meta.service';
@@ -81,18 +86,42 @@ export class MetaController {
       return;
     }
     try {
-      await this.meta.handleCallback(user.id, code);
+      const { syncError } = await this.meta.handleCallback(user.id, code);
+      if (syncError) {
+        // Connected, but accounts couldn't load — show the real reason so the user can act.
+        res.redirect(
+          `${this.frontend}/connections?meta=sync_failed&reason=${encodeURIComponent(truncate(syncError))}`,
+        );
+        return;
+      }
       res.redirect(`${this.frontend}/connections?meta=connected`);
     } catch (err) {
-      this.logger.error(`Meta callback failed: ${(err as Error).message}`);
-      res.redirect(`${this.frontend}/connections?meta=error`);
+      const message = (err as Error).message;
+      this.logger.error(`Meta callback failed: ${message}`);
+      res.redirect(`${this.frontend}/connections?meta=error&reason=${encodeURIComponent(truncate(message))}`);
     }
+  }
+
+  // POST /api/meta/sync — re-sync ad accounts for the existing connection.
+  @Post('sync')
+  async sync(@CurrentUser() user: User): Promise<MetaSyncResponse> {
+    const accountCount = await this.meta.resync(user.id);
+    return { accountCount };
   }
 
   // GET /api/meta/ad-accounts — connection status + synced accounts.
   @Get('ad-accounts')
   status(@CurrentUser() user: User): Promise<MetaStatusResponse> {
     return this.meta.getStatus(user.id);
+  }
+
+  // GET /api/meta/ad-accounts/:id/action-types — action types the account actually produced.
+  @Get('ad-accounts/:id/action-types')
+  actionTypes(
+    @CurrentUser() user: User,
+    @Param('id') id: string,
+  ): Promise<AccountActionTypesResponse> {
+    return this.meta.getAccountActionTypes(user.id, id);
   }
 
   @Patch('ad-accounts/:id')
@@ -110,4 +139,9 @@ export class MetaController {
     await this.meta.disconnect(user.id);
     return { ok: true };
   }
+}
+
+/** Keep the user-facing reason short enough for a redirect URL + toast. */
+function truncate(message: string, max = 180): string {
+  return message.length > max ? `${message.slice(0, max - 1)}…` : message;
 }

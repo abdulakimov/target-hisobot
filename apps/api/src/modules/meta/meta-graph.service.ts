@@ -51,11 +51,22 @@ export class MetaGraphService {
   }
 
   private async getJson(url: string, context: string): Promise<Record<string, unknown>> {
-    const res = await fetch(url);
-    const data = (await res.json()) as Record<string, unknown>;
+    let res: Awaited<ReturnType<typeof fetch>>;
+    try {
+      res = await fetch(url);
+    } catch (e) {
+      throw new Error(`Meta ${context} failed: tarmoq xatosi (${(e as Error).message})`);
+    }
+    const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
-      const err = (data.error as { message?: string } | undefined)?.message ?? JSON.stringify(data);
-      throw new Error(`Meta ${context} failed: ${err}`);
+      const fbErr = data.error as
+        | { message?: string; code?: number; error_subcode?: number; type?: string }
+        | undefined;
+      // Include FB error code/subcode — the only way to tell apart "app not in live mode",
+      // "missing permission", "token expired", etc. when OAuth/sync fails in prod.
+      const detail = fbErr?.message ?? JSON.stringify(data);
+      const codes = fbErr?.code != null ? ` [code ${fbErr.code}${fbErr.error_subcode ? `/${fbErr.error_subcode}` : ''}]` : '';
+      throw new Error(`Meta ${context} failed: ${detail}${codes}`);
     }
     return data;
   }
@@ -106,6 +117,32 @@ export class MetaGraphService {
       url = paging?.next ?? null;
     }
     return out;
+  }
+
+  /**
+   * Distinct action_types observed on an account in a lookback window, with totals —
+   * used to populate the per-account lead-type picker with what the account really produces.
+   */
+  async getAvailableActionTypes(
+    token: string,
+    actId: string,
+    datePreset = 'last_30d',
+  ): Promise<Array<{ actionType: string; value: number }>> {
+    const url = this.graph(
+      `/${actId}/insights?level=account&date_preset=${datePreset}&fields=actions&access_token=${encodeURIComponent(token)}`,
+    );
+    const data = await this.getJson(url, 'action types');
+    const rows = (data.data as RawInsights[] | undefined) ?? [];
+    const totals = new Map<string, number>();
+    for (const row of rows) {
+      for (const a of row.actions ?? []) {
+        const n = Number(a.value);
+        totals.set(a.action_type, (totals.get(a.action_type) ?? 0) + (Number.isFinite(n) ? n : 0));
+      }
+    }
+    return [...totals.entries()]
+      .map(([actionType, value]) => ({ actionType, value }))
+      .sort((a, b) => b.value - a.value);
   }
 
   /** Account-level insights for a date_preset window (single row, or null if no data). */

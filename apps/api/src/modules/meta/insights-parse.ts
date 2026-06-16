@@ -1,4 +1,4 @@
-import { LEAD_ACTION_OPTIONS, type ReportMetricValues } from '@hisobotchi/shared';
+import { LEAD_ACTION_OPTIONS, isCuratedLeadKey, type ReportMetricValues } from '@hisobotchi/shared';
 
 /** Raw account-level insights row from the Meta Graph API. */
 export interface RawInsights {
@@ -27,10 +27,17 @@ function sumActions(
   return total;
 }
 
-/** Meta action_type(s) a lead-option key maps to (empty for null/unknown). */
+/**
+ * Meta action_type(s) a lead selection maps to. A curated key expands to its mapped
+ * action_types; any other value is treated as a raw Meta action_type (pass-through),
+ * so accounts whose real lead event isn't in the curated list still work.
+ */
 export function leadActionTypesFor(leadKey: string | null): string[] {
   if (!leadKey) return [];
-  return LEAD_ACTION_OPTIONS.find((o) => o.key === leadKey)?.actionTypes ?? [];
+  if (isCuratedLeadKey(leadKey)) {
+    return LEAD_ACTION_OPTIONS.find((o) => o.key === leadKey)?.actionTypes ?? [];
+  }
+  return [leadKey];
 }
 
 /**

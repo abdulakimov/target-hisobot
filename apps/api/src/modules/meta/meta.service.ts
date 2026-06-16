@@ -1,15 +1,21 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { LEAD_ACTION_OPTIONS, type MetaStatusResponse, type UpdateAdAccountRequest } from '@hisobotchi/shared';
+import {
+  isValidLeadSelection,
+  labelForActionType,
+  type AccountActionTypesResponse,
+  type MetaStatusResponse,
+  type UpdateAdAccountRequest,
+} from '@hisobotchi/shared';
 import type { AppConfig } from '../common/config/env.validation';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { EncryptionService } from '../common/crypto/encryption.service';
 import { MetaGraphService } from './meta-graph.service';
 
-const VALID_LEAD_KEYS = new Set(LEAD_ACTION_OPTIONS.map((o) => o.key));
-
 @Injectable()
 export class MetaService {
+  private readonly logger = new Logger(MetaService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly graph: MetaGraphService,
@@ -17,8 +23,13 @@ export class MetaService {
     private readonly config: ConfigService<AppConfig, true>,
   ) {}
 
-  /** OAuth callback: code → long-lived token → encrypted MetaConnection → sync ad accounts. */
-  async handleCallback(userId: string, code: string): Promise<void> {
+  /**
+   * OAuth callback: code → long-lived token → encrypted MetaConnection → sync ad accounts.
+   * The connection is persisted before syncing; a sync failure is returned (not thrown) so a
+   * partial success (connected, but accounts couldn't load) still leaves a usable connection.
+   * Returns the sync error message, or null on full success.
+   */
+  async handleCallback(userId: string, code: string): Promise<{ syncError: string | null }> {
     const short = await this.graph.exchangeCode(code);
     const long = await this.graph.exchangeLongLived(short.accessToken);
     const me = await this.graph.getMe(long.accessToken);
@@ -38,7 +49,26 @@ export class MetaService {
           data: { userId, metaUserId: me.id, accessTokenEnc, tokenExpiresAt, scopes, status: 'active' },
         });
 
-    await this.syncAdAccounts(userId, connection.id, long.accessToken);
+    try {
+      await this.syncAdAccounts(userId, connection.id, long.accessToken);
+      return { syncError: null };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Ad-account sync failed for user ${userId}: ${message}`);
+      return { syncError: message };
+    }
+  }
+
+  /** Re-sync ad accounts for an existing connection without re-running OAuth. */
+  async resync(userId: string): Promise<number> {
+    const connection = await this.prisma.metaConnection.findFirst({ where: { userId } });
+    if (!connection) throw new NotFoundException('Meta ulanmagan');
+    if (connection.status !== 'active') {
+      throw new BadRequestException('Ulanish faol emas — qayta ulang');
+    }
+    const token = this.crypto.decrypt(connection.accessTokenEnc);
+    await this.syncAdAccounts(userId, connection.id, token);
+    return this.prisma.adAccount.count({ where: { userId } });
   }
 
   /** Upsert ad accounts from Meta; never resets the user's enabled / lead-type choices. */
@@ -98,7 +128,7 @@ export class MetaService {
     if (
       body.defaultLeadActionType != null &&
       body.defaultLeadActionType !== '' &&
-      !VALID_LEAD_KEYS.has(body.defaultLeadActionType)
+      !isValidLeadSelection(body.defaultLeadActionType)
     ) {
       throw new BadRequestException('Invalid lead action type');
     }
@@ -112,6 +142,27 @@ export class MetaService {
           : {}),
       },
     });
+  }
+
+  /** Action types this account actually produced recently (for the lead-type picker). */
+  async getAccountActionTypes(userId: string, id: string): Promise<AccountActionTypesResponse> {
+    const account = await this.prisma.adAccount.findFirst({ where: { id, userId } });
+    if (!account) throw new NotFoundException('Ad account not found');
+    const connection = await this.prisma.metaConnection.findUnique({
+      where: { id: account.metaConnectionId },
+    });
+    if (!connection || connection.status !== 'active') {
+      throw new BadRequestException('Ulanish faol emas — qayta ulang');
+    }
+    const token = this.crypto.decrypt(connection.accessTokenEnc);
+    const observed = await this.graph.getAvailableActionTypes(token, account.actId);
+    return {
+      actionTypes: observed.map((o) => ({
+        actionType: o.actionType,
+        label: labelForActionType(o.actionType),
+        value: o.value,
+      })),
+    };
   }
 
   async disconnect(userId: string): Promise<void> {

@@ -7,9 +7,14 @@ describe('leadActionTypesFor', () => {
       'onsite_conversion.messaging_conversation_started_7d',
     );
   });
-  it('is empty for null or unknown keys', () => {
+  it('is empty for null', () => {
     expect(leadActionTypesFor(null)).toEqual([]);
-    expect(leadActionTypesFor('nope')).toEqual([]);
+  });
+  it('passes a non-curated value through as a raw action_type', () => {
+    // Accounts whose lead event isn't in the curated list still work.
+    expect(leadActionTypesFor('offsite_conversion.fb_pixel_custom')).toEqual([
+      'offsite_conversion.fb_pixel_custom',
+    ]);
   });
 });
 

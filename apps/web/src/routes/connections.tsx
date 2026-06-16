@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { PlugZap, Trash2 } from 'lucide-react';
+import { PlugZap, RefreshCw, Trash2 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,13 +10,16 @@ import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import {
   LEAD_ACTION_OPTIONS,
+  type AccountActionTypesResponse,
   type AdAccountResponse,
   type MetaStatusResponse,
+  type MetaSyncResponse,
   type UpdateAdAccountRequest,
 } from '@hisobotchi/shared';
 
 const META_MESSAGES: Record<string, { ok: boolean; text: string }> = {
   connected: { ok: true, text: 'Facebook ulandi ✅' },
+  sync_failed: { ok: false, text: 'Ulandi, lekin akkauntlarni yuklab bo‘lmadi' },
   error: { ok: false, text: 'Ulanishda xatolik yuz berdi' },
   denied: { ok: false, text: 'Ruxsat berilmadi' },
   unconfigured: { ok: false, text: 'Meta app sozlanmagan (server)' },
@@ -35,13 +38,25 @@ export function ConnectionsPage() {
     const m = params.get('meta');
     if (m && META_MESSAGES[m]) {
       const { ok, text } = META_MESSAGES[m];
-      if (ok) toast.success(text);
-      else toast.error(text);
+      const reason = params.get('reason');
+      const full = reason ? `${text}: ${reason}` : text;
+      if (ok) toast.success(full);
+      else toast.error(full, { duration: 8000 });
       params.delete('meta');
+      params.delete('reason');
       setParams(params, { replace: true });
       void qc.invalidateQueries({ queryKey: ['meta-status'] });
     }
   }, [params, setParams, qc]);
+
+  const sync = useMutation({
+    mutationFn: () => api<MetaSyncResponse>('/api/meta/sync', { method: 'POST' }),
+    onSuccess: (res) => {
+      toast.success(`Yangilandi — ${res.accountCount} ta akkaunt`);
+      void qc.invalidateQueries({ queryKey: ['meta-status'] });
+    },
+    onError: (e) => toast.error((e as Error).message || 'Yangilashda xatolik'),
+  });
 
   const update = useMutation({
     mutationFn: ({ id, body }: { id: string; body: UpdateAdAccountRequest }) =>
@@ -102,15 +117,26 @@ export function ConnectionsPage() {
             {accounts.length} ta reklama akkaunti
           </span>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => disconnect.mutate()}
-          disabled={disconnect.isPending}
-        >
-          <Trash2 />
-          Uzish
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => sync.mutate()}
+            disabled={sync.isPending}
+          >
+            <RefreshCw className={sync.isPending ? 'animate-spin' : undefined} />
+            Yangilash
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => disconnect.mutate()}
+            disabled={disconnect.isPending}
+          >
+            <Trash2 />
+            Uzish
+          </Button>
+        </div>
       </div>
 
       {accounts.length === 0 ? (
@@ -135,6 +161,19 @@ function AccountCard({
   account: AdAccountResponse;
   onChange: (body: UpdateAdAccountRequest) => void;
 }) {
+  // Action types the account actually produced recently — lets the user pick the real
+  // lead event even when it isn't in the curated list. Fetched lazily for enabled accounts.
+  const detected = useQuery({
+    queryKey: ['account-action-types', account.id],
+    queryFn: () => api<AccountActionTypesResponse>(`/api/meta/ad-accounts/${account.id}/action-types`),
+    enabled: account.enabled,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  const curatedActionTypes = new Set(LEAD_ACTION_OPTIONS.flatMap((o) => o.actionTypes));
+  const extra = (detected.data?.actionTypes ?? []).filter((a) => !curatedActionTypes.has(a.actionType));
+
   return (
     <Card>
       <CardContent className="space-y-3 p-4">
@@ -160,12 +199,26 @@ function AccountCard({
               onChange={(e) => onChange({ defaultLeadActionType: e.target.value || null })}
             >
               <option value="">Tanlanmagan</option>
-              {LEAD_ACTION_OPTIONS.map((o) => (
-                <option key={o.key} value={o.key}>
-                  {o.label}
-                </option>
-              ))}
+              <optgroup label="Standart turlar">
+                {LEAD_ACTION_OPTIONS.map((o) => (
+                  <option key={o.key} value={o.key}>
+                    {o.label}
+                  </option>
+                ))}
+              </optgroup>
+              {extra.length > 0 && (
+                <optgroup label="Account'da aniqlangan">
+                  {extra.map((a) => (
+                    <option key={a.actionType} value={a.actionType}>
+                      {(a.label ?? a.actionType) + ` (${a.value})`}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
             </select>
+            {detected.isError && (
+              <p className="text-xs text-muted-foreground">Mavjud turlarni yuklab bo‘lmadi.</p>
+            )}
           </div>
         )}
       </CardContent>
