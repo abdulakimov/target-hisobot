@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -34,20 +34,58 @@ export function ConnectionsPage() {
     queryFn: () => api<MetaStatusResponse>('/api/meta/ad-accounts'),
   });
 
+  // Show the OAuth outcome (toast) and refresh the account list. Used both by the
+  // popup flow (postMessage) and the full-redirect fallback (query params).
+  const showMetaResult = useCallback(
+    (meta: string, reason: string | null) => {
+      const known = META_MESSAGES[meta];
+      if (!known) return;
+      const full = reason ? `${known.text}: ${reason}` : known.text;
+      if (known.ok) toast.success(full);
+      else toast.error(full, { duration: 8000 });
+      void qc.invalidateQueries({ queryKey: ['meta-status'] });
+    },
+    [qc],
+  );
+
+  // Popup flow: the OAuth popup relays its result here, then closes itself.
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      if (e.origin !== window.location.origin) return;
+      const d = e.data as { type?: string; meta?: string; reason?: string | null };
+      if (d?.type === 'meta-oauth' && d.meta) showMetaResult(d.meta, d.reason ?? null);
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [showMetaResult]);
+
+  // Fallback: if the popup was blocked we fall back to a full redirect, which
+  // returns here with `?meta=...` in the URL.
   useEffect(() => {
     const m = params.get('meta');
     if (m && META_MESSAGES[m]) {
-      const { ok, text } = META_MESSAGES[m];
-      const reason = params.get('reason');
-      const full = reason ? `${text}: ${reason}` : text;
-      if (ok) toast.success(full);
-      else toast.error(full, { duration: 8000 });
+      showMetaResult(m, params.get('reason'));
       params.delete('meta');
       params.delete('reason');
       setParams(params, { replace: true });
-      void qc.invalidateQueries({ queryKey: ['meta-status'] });
     }
-  }, [params, setParams, qc]);
+  }, [params, setParams, showMetaResult]);
+
+  // Open the Meta OAuth dialog in a popup so the dashboard stays put. Falls back
+  // to a full-page redirect if the browser blocks the popup.
+  const connectMeta = useCallback(() => {
+    const w = 600;
+    const h = 720;
+    const left = window.screenX + Math.max(0, (window.outerWidth - w) / 2);
+    const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
+    const popup = window.open(
+      '/api/meta/connect',
+      'meta_oauth',
+      `width=${w},height=${h},left=${left},top=${top}`,
+    );
+    if (!popup) window.location.href = '/api/meta/connect';
+    else popup.focus();
+  }, []);
 
   const sync = useMutation({
     mutationFn: () => api<MetaSyncResponse>('/api/meta/sync', { method: 'POST' }),
@@ -92,12 +130,7 @@ export function ConnectionsPage() {
           <p className="text-sm text-muted-foreground">
             Hisobotlar olish uchun Meta (Facebook) reklama akkauntingizni ulang.
           </p>
-          <Button
-            className="w-full"
-            onClick={() => {
-              window.location.href = '/api/meta/connect';
-            }}
-          >
+          <Button className="w-full" onClick={connectMeta}>
             Facebook ulash
           </Button>
           {connection?.status === 'expired' && (
