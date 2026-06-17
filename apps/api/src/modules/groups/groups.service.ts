@@ -68,6 +68,44 @@ export class GroupsService {
     return { ok: true, group };
   }
 
+  /**
+   * Auto-pair on add: when a logged-in user adds the bot to a group, claim THEIR most
+   * recent pending pairing token for this chat — no /start needed. Robust against clients
+   * (e.g. Telegram macOS) where the startgroup deep link fails to deliver /start.
+   * Returns ok:false WITHOUT consuming a token when the chat is already linked, the
+   * performer isn't a known user, or they have no valid pending token.
+   */
+  async claimPairingByPerformer(
+    performerTelegramId: bigint,
+    chat: PairingChat,
+  ): Promise<PairingResult> {
+    const user = await this.prisma.user.findUnique({
+      where: { telegramUserId: performerTelegramId },
+    });
+    if (!user) return { ok: false };
+
+    const existing = await this.prisma.telegramGroup.findUnique({
+      where: { userId_chatId: { userId: user.id, chatId: chat.chatId } },
+    });
+    if (existing) return { ok: false };
+
+    const token = await this.prisma.groupPairingToken.findFirst({
+      where: { userId: user.id, used: false, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!token) return { ok: false };
+
+    return this.claimPairing(token.token, chat);
+  }
+
+  /** True if the chat is currently linked to some user (bot not removed). */
+  async isChatLinked(chatId: bigint): Promise<boolean> {
+    const group = await this.prisma.telegramGroup.findFirst({
+      where: { chatId, botStatus: { not: 'removed' } },
+    });
+    return group != null;
+  }
+
   /** List the user's groups, newest first. */
   list(userId: string): Promise<TelegramGroup[]> {
     return this.prisma.telegramGroup.findMany({ where: { userId }, orderBy: { createdAt: 'desc' } });

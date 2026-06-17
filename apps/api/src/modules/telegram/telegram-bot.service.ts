@@ -57,6 +57,9 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
 
       // Group pairing: /start <token> when the bot is added via a startgroup deep link.
       if (chat && (chat.type === 'group' || chat.type === 'supergroup')) {
+        this.logger.log(
+          `group /start received: chat=${chat.id} "${chat.title ?? ''}" type=${chat.type} payloadLen=${payload.length}`,
+        );
         if (!payload) return;
         let botStatus: BotStatus = 'member';
         try {
@@ -71,11 +74,18 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
           chatType: chat.type,
           botStatus,
         });
-        await ctx.reply(
-          result.ok
-            ? '✅ Bu guruh hisobotchingizga ulandi.\n\nBelgilangan vaqtlarda shu yerga hisobotlar yuboriladi.'
-            : '❌ Ulanish havolasi eskirgan yoki yaroqsiz.\nDashboarddan "Guruhni ulash"ni qayta bosing.',
-        );
+        this.logger.log(`group pairing claim: ok=${result.ok} chat=${chat.id} botStatus=${botStatus}`);
+        if (result.ok) {
+          await ctx.reply(
+            '✅ Bu guruh hisobotchingizga ulandi.\n\nBelgilangan vaqtlarda shu yerga hisobotlar yuboriladi.',
+          );
+        } else if (!(await this.groups.isChatLinked(BigInt(chat.id)))) {
+          // Stay silent if the chat is already linked (e.g. auto-paired on add) — only a
+          // genuinely-failed claim warrants the error message.
+          await ctx.reply(
+            '❌ Ulanish havolasi eskirgan yoki yaroqsiz.\nDashboarddan "Guruhni ulash"ni qayta bosing.',
+          );
+        }
         return;
       }
 
@@ -120,6 +130,31 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
       const chat = ctx.chat;
       if (chat.type !== 'group' && chat.type !== 'supergroup') return;
       const newStatus = mapBotStatus(ctx.myChatMember.new_chat_member.status);
+      this.logger.log(
+        `my_chat_member: chat=${chat.id} "${chat.title ?? ''}" type=${chat.type} ` +
+          `status→${newStatus} (raw ${ctx.myChatMember.new_chat_member.status})`,
+      );
+
+      // Auto-pair on add: when a logged-in user adds the bot to a group, claim their pending
+      // pairing token for this chat automatically — no /start needed. Makes pairing work even
+      // when the startgroup deep link doesn't deliver /start (e.g. Telegram macOS client).
+      const performerId = ctx.myChatMember.from?.id;
+      if ((newStatus === 'member' || newStatus === 'admin') && performerId != null) {
+        const auto = await this.groups.claimPairingByPerformer(BigInt(performerId), {
+          chatId: BigInt(chat.id),
+          title: chat.title ?? 'Guruh',
+          chatType: chat.type,
+          botStatus: newStatus,
+        });
+        if (auto.ok) {
+          this.logger.log(`auto-pair on add: linked chat=${chat.id} via performer=${performerId}`);
+          await ctx.api.sendMessage(
+            chat.id,
+            '✅ Bu guruh hisobotchingizga ulandi.\n\nBelgilangan vaqtlarda shu yerga hisobotlar yuboriladi.',
+          );
+        }
+      }
+
       const changes = await this.groups.updateBotStatus(BigInt(chat.id), newStatus);
       for (const change of changes) {
         if (change.newStatus === 'removed' && change.previousStatus !== 'removed') {

@@ -18,7 +18,13 @@ export function GroupsPage() {
   const qc = useQueryClient();
   const [pairing, setPairing] = useState<PairingLinkResponse | null>(null);
 
-  const groupsQuery = useQuery({ queryKey: ['groups'], queryFn: groupsApi.list });
+  // While a pairing link is active, poll so the freshly-added group appears on its own —
+  // no manual "Yangilash" needed after the bot joins.
+  const groupsQuery = useQuery({
+    queryKey: ['groups'],
+    queryFn: groupsApi.list,
+    refetchInterval: pairing ? 4000 : false,
+  });
 
   const createLink = useMutation({
     mutationFn: groupsApi.createPairingLink,
@@ -47,6 +53,13 @@ export function GroupsPage() {
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ['groups'] });
   const groups = groupsQuery.data ?? [];
+  // Native app deep link (tg://) — opens Telegram's "add to group" picker directly. More
+  // reliable than the t.me web link on desktop, esp. macOS where t.me opens the bot chat.
+  const tgLink = pairing
+    ? pairing.deepLink
+        .replace('https://t.me/', 'tg://resolve?domain=')
+        .replace('?startgroup=', '&startgroup=')
+    : '';
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -67,9 +80,12 @@ export function GroupsPage() {
           </CardHeader>
           <CardContent className="space-y-3">
             <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
-              <li>Havolani oching va botni qo‘shmoqchi bo‘lgan guruhni tanlang.</li>
-              <li>Bot guruhga qo‘shilgach, ulanish avtomatik tasdiqlanadi.</li>
-              <li>So‘ng bu ro‘yxatni yangilang.</li>
+              <li>Havolani oching — Telegram “guruh tanlash” oynasini ko‘rsatadi.</li>
+              <li>
+                Bot <strong>hali a‘zo bo‘lmagan</strong> guruhni tanlang (botning shaxsiy chatida
+                “Start” bosmang).
+              </li>
+              <li>Bot o‘zi qo‘shilib avtomatik ulanadi — ro‘yxat shu yerda o‘zi yangilanadi.</li>
             </ol>
             <div className="flex items-center rounded-md border border-border bg-background px-3 py-2">
               <span className="truncate font-mono text-xs text-muted-foreground">{pairing.deepLink}</span>
@@ -79,6 +95,12 @@ export function GroupsPage() {
                 <a href={pairing.deepLink} target="_blank" rel="noreferrer">
                   <ExternalLink />
                   Telegramda ochish
+                </a>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <a href={tgLink}>
+                  <ExternalLink />
+                  Ilovada ochish (Mac/Desktop)
                 </a>
               </Button>
               <Button size="sm" variant="outline" onClick={copyLink}>
@@ -91,7 +113,9 @@ export function GroupsPage() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Havola ~15 daqiqa amal qiladi va bir marta ishlaydi.
+              Havola ~15 daqiqa amal qiladi va bir marta ishlaydi. Agar havola botning shaxsiy
+              chatini ochib qo‘ysa (ba’zan macOS’da), guruhga botni <strong>qo‘lda qo‘shing</strong>{' '}
+              (guruh → A‘zo qo‘shish) — u baribir avtomatik ulanadi.
             </p>
           </CardContent>
         </Card>

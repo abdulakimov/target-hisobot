@@ -1,0 +1,8 @@
+# Untracked local override: publish our Postgres on host port 5434 so the
+# host-run api (pnpm dev) can reach it. Host 5432 is taken by another project.
+# Reuses the existing target-hisobotchi-bot_pgdata volume (data preserved).
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev-local.yml up -d --force-recreate postgres
+services:
+  postgres:
+    ports:
+      - "5434:5432"
