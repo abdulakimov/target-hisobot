@@ -8,6 +8,8 @@ export interface TelegramProfile {
   first_name?: string | null;
   last_name?: string | null;
   photo_url?: string | null;
+  /** Telegram profile photo file_id, resolved by the bot via getUserProfilePhotos. */
+  photo_file_id?: string | null;
 }
 
 @Injectable()
@@ -26,6 +28,7 @@ export class UsersService {
         firstName: data.first_name ?? null,
         lastName: data.last_name ?? null,
         photoUrl: data.photo_url ?? null,
+        telegramPhotoFileId: data.photo_file_id ?? null,
         lastLoginAt: now,
       },
       update: {
@@ -33,6 +36,8 @@ export class UsersService {
         firstName: data.first_name ?? undefined,
         lastName: data.last_name ?? undefined,
         photoUrl: data.photo_url ?? undefined,
+        // Refresh on each login; explicit null clears a removed photo.
+        telegramPhotoFileId: data.photo_file_id ?? null,
         lastLoginAt: now,
       },
     });

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import {
@@ -9,11 +10,13 @@ import {
   Moon,
   Sun,
   Plus,
-  LogOut,
   Bell,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { UserAvatar } from '@/components/ui/user-avatar';
 import { useAuth } from '@/providers/auth-provider';
 import { ReportEditorProvider, useReportEditor } from '@/providers/report-editor-provider';
 
@@ -32,6 +35,21 @@ const TITLES: Record<string, string> = {
   '/history': 'Tarix',
   '/settings': 'Sozlamalar',
 };
+
+const SIDEBAR_STORAGE_KEY = 'sidebar-collapsed';
+
+function useSidebarCollapsed() {
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.localStorage.getItem(SIDEBAR_STORAGE_KEY) === '1';
+  });
+
+  useEffect(() => {
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, collapsed ? '1' : '0');
+  }, [collapsed]);
+
+  return { collapsed, toggle: () => setCollapsed((c) => !c) };
+}
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -84,18 +102,28 @@ export function AppShell() {
 
 function AppShellLayout() {
   const { pathname } = useLocation();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { openEditor } = useReportEditor();
+  const { collapsed, toggle } = useSidebarCollapsed();
   const title = TITLES[pathname] ?? 'Hisobotchi';
-  const initial = (user?.firstName ?? user?.username ?? '?').charAt(0).toUpperCase();
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {/* Sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
-        <div className="flex h-14 items-center gap-2 px-5 font-semibold">
-          <BarChart3 className="size-5 text-primary" />
-          Hisobotchi
+      <aside
+        className={cn(
+          'hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 md:flex',
+          collapsed ? 'w-16' : 'w-60',
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-14 items-center overflow-hidden font-semibold',
+            collapsed ? 'justify-center px-0' : 'gap-2 px-5',
+          )}
+        >
+          <BarChart3 className="size-5 shrink-0 text-primary" />
+          {!collapsed && <span className="truncate">Hisobotchi</span>}
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
           {NAV.map(({ to, label, icon: Icon, end }) => (
@@ -103,20 +131,43 @@ function AppShellLayout() {
               key={to}
               to={to}
               end={end}
+              title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center rounded-md py-2 text-sm font-medium transition-colors',
+                  collapsed ? 'justify-center px-0' : 'gap-3 px-3',
                   isActive
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                 )
               }
             >
-              <Icon className="size-4" />
-              {label}
+              <Icon className="size-4 shrink-0" />
+              {!collapsed && <span className="truncate">{label}</span>}
             </NavLink>
           ))}
         </nav>
+        <div className="border-t border-sidebar-border p-3">
+          <Button
+            variant="ghost"
+            onClick={toggle}
+            aria-label={collapsed ? 'Menyuni yoyish' : 'Menyuni yig‘ish'}
+            title={collapsed ? 'Yoyish' : 'Yig‘ish'}
+            className={cn(
+              'w-full text-muted-foreground',
+              collapsed ? 'justify-center px-0' : 'justify-start gap-3 px-3',
+            )}
+          >
+            {collapsed ? (
+              <PanelLeftOpen className="size-4 shrink-0" />
+            ) : (
+              <>
+                <PanelLeftClose className="size-4 shrink-0" />
+                <span className="truncate">Yig‘ish</span>
+              </>
+            )}
+          </Button>
+        </div>
       </aside>
 
       {/* Main */}
@@ -129,17 +180,18 @@ function AppShellLayout() {
               Yangi hisobot
             </Button>
             <ThemeToggle />
-            <div className="flex items-center gap-2 pl-1">
-              <div
-                className="grid size-8 place-items-center rounded-full bg-primary/15 text-sm font-medium text-primary"
-                title={user?.firstName ?? user?.username ?? ''}
-              >
-                {initial}
-              </div>
-              <Button variant="ghost" size="icon" aria-label="Chiqish" onClick={() => logout()}>
-                <LogOut />
-              </Button>
-            </div>
+            <NavLink
+              to="/settings"
+              className="pl-1"
+              title={user?.firstName ?? user?.username ?? 'Profil'}
+              aria-label="Profil va sozlamalar"
+            >
+              <UserAvatar
+                photoUrl={user?.photoUrl}
+                name={user?.firstName ?? user?.username}
+                className="transition-opacity hover:opacity-80"
+              />
+            </NavLink>
           </div>
         </header>
         <main className="flex-1 overflow-auto p-6">

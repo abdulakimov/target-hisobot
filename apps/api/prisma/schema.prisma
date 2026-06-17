@@ -43,6 +43,9 @@ model User {
   firstName      String?   @map("first_name")
   lastName       String?   @map("last_name")
   photoUrl       String?   @map("photo_url")
+  // Telegram profile photo file_id (reusable across getFile calls); the photo bytes
+  // are streamed on demand via GET /api/me/photo so the bot token stays server-side.
+  telegramPhotoFileId String? @map("telegram_photo_file_id")
   timezone       String    @default("Asia/Tashkent")
   dmEnabled      Boolean   @default(false) @map("dm_enabled")
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)

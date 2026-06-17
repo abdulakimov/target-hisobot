@@ -9,7 +9,9 @@ export function toMeResponse(user: User): MeResponse {
     username: user.username,
     firstName: user.firstName,
     lastName: user.lastName,
-    photoUrl: user.photoUrl,
+    // Prefer the Telegram profile photo (streamed via the bot) when we have a file_id;
+    // otherwise fall back to any stored URL (e.g. from the legacy login widget).
+    photoUrl: user.telegramPhotoFileId ? '/api/me/photo' : user.photoUrl,
     timezone: user.timezone,
     dmEnabled: user.dmEnabled,
   };

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Bot } from 'grammy';
+import type { Api } from 'grammy';
 import type { BotStatus } from '@prisma/client';
 import type { AppConfig } from '../common/config/env.validation';
 import { UsersService } from '../users/users.service';
@@ -95,11 +96,13 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
       // Bot deep-link login: /start login_<token>
       if (payload.startsWith(LOGIN_PAYLOAD_PREFIX) && telegramId != null) {
         const loginToken = payload.slice(LOGIN_PAYLOAD_PREFIX.length);
+        const photoFileId = await this.resolveProfilePhotoFileId(ctx.api, telegramId);
         const ok = await this.loginTokens.claim(loginToken, {
           id: telegramId,
           first_name: ctx.from?.first_name,
           last_name: ctx.from?.last_name,
           username: ctx.from?.username,
+          photo_file_id: photoFileId,
         });
         await ctx.reply(
           ok
@@ -181,5 +184,44 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
   /** Exposed for the report Sender (M5) and DM alerts (M6). */
   getBot(): Bot | undefined {
     return this.bot;
+  }
+
+  /**
+   * Resolve the user's current Telegram profile photo file_id (largest size of the
+   * most recent photo). Returns null if the user has no photo or hides it — never throws.
+   */
+  private async resolveProfilePhotoFileId(api: Api, telegramId: number): Promise<string | null> {
+    try {
+      const photos = await api.getUserProfilePhotos(telegramId, { limit: 1 });
+      const sizes = photos.photos[0];
+      if (!sizes?.length) return null;
+      // Sizes are ordered small→large; the last is the highest resolution.
+      return sizes[sizes.length - 1].file_id;
+    } catch (err) {
+      this.logger.warn(`getUserProfilePhotos failed for ${telegramId}: ${String(err)}`);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch the bytes for a stored profile-photo file_id. Resolves the (short-lived)
+   * file_path via getFile, then downloads using the bot token — kept server-side.
+   * Returns null if the bot is disabled or the fetch fails.
+   */
+  async fetchProfilePhoto(fileId: string): Promise<{ buffer: Buffer; contentType: string } | null> {
+    const token = this.config.get('TELEGRAM_BOT_TOKEN', { infer: true });
+    if (!this.bot || !token) return null;
+    try {
+      const file = await this.bot.api.getFile(fileId);
+      if (!file.file_path) return null;
+      const res = await fetch(`https://api.telegram.org/file/bot${token}/${file.file_path}`);
+      if (!res.ok) return null;
+      const buffer = Buffer.from(await res.arrayBuffer());
+      const contentType = res.headers.get('content-type') ?? 'image/jpeg';
+      return { buffer, contentType };
+    } catch (err) {
+      this.logger.warn(`fetchProfilePhoto failed for ${fileId}: ${String(err)}`);
+      return null;
+    }
   }
 }

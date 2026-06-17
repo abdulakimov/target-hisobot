@@ -12,7 +12,7 @@ import { DashboardPage } from '@/routes/dashboard';
 import { GroupsPage } from '@/routes/groups';
 import { ConnectionsPage } from '@/routes/connections';
 import { HistoryPage } from '@/routes/history';
-import { PlaceholderPage } from '@/routes/placeholder';
+import { SettingsPage } from '@/routes/settings';
 import '@/index.css';
 
 // If this document was opened as the Meta OAuth popup, the backend callback has
@@ -45,7 +45,7 @@ const router = createBrowserRouter([
           { path: '/groups', element: <GroupsPage /> },
           { path: '/connections', element: <ConnectionsPage /> },
           { path: '/history', element: <HistoryPage /> },
-          { path: '/settings', element: <PlaceholderPage title="Sozlamalar" /> },
+          { path: '/settings', element: <SettingsPage /> },
         ],
       },
     ],
