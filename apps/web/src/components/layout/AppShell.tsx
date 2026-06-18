@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useTheme } from 'next-themes';
 import {
@@ -9,11 +10,12 @@ import {
   Moon,
   Sun,
   Plus,
-  LogOut,
+  PanelLeft,
   Bell,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
+import { UserAvatar } from '@/components/UserAvatar';
 import { useAuth } from '@/providers/auth-provider';
 import { ReportEditorProvider, useReportEditor } from '@/providers/report-editor-provider';
 
@@ -30,8 +32,11 @@ const TITLES: Record<string, string> = {
   '/groups': 'Guruhlar',
   '/connections': 'Ulanishlar',
   '/history': 'Tarix',
+  '/profile': 'Profil',
   '/settings': 'Sozlamalar',
 };
+
+const COLLAPSE_KEY = 'sidebar-collapsed';
 
 function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
@@ -84,36 +89,57 @@ export function AppShell() {
 
 function AppShellLayout() {
   const { pathname } = useLocation();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { openEditor } = useReportEditor();
   const title = TITLES[pathname] ?? 'Hisobotchi';
-  const initial = (user?.firstName ?? user?.username ?? '?').charAt(0).toUpperCase();
+
+  const [collapsed, setCollapsed] = useState(
+    () => typeof window !== 'undefined' && localStorage.getItem(COLLAPSE_KEY) === '1',
+  );
+  const toggleCollapsed = () =>
+    setCollapsed((c) => {
+      const next = !c;
+      localStorage.setItem(COLLAPSE_KEY, next ? '1' : '0');
+      return next;
+    });
 
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       {/* Sidebar */}
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
-        <div className="flex h-14 items-center gap-2 px-5 font-semibold">
-          <BarChart3 className="size-5 text-primary" />
-          Hisobotchi
+      <aside
+        className={cn(
+          'hidden shrink-0 flex-col border-r border-sidebar-border bg-sidebar transition-[width] duration-200 md:flex',
+          collapsed ? 'w-16' : 'w-60',
+        )}
+      >
+        <div
+          className={cn(
+            'flex h-14 items-center gap-2 font-semibold',
+            collapsed ? 'justify-center px-0' : 'px-5',
+          )}
+        >
+          <BarChart3 className="size-5 shrink-0 text-primary" />
+          {!collapsed && 'Hisobotchi'}
         </div>
-        <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
+        <nav className={cn('flex flex-1 flex-col gap-1 py-2', collapsed ? 'px-2' : 'px-3')}>
           {NAV.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
               end={end}
+              title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-3 rounded-md py-2 text-sm font-medium transition-colors',
+                  collapsed ? 'justify-center px-0' : 'px-3',
                   isActive
                     ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                     : 'text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                 )
               }
             >
-              <Icon className="size-4" />
-              {label}
+              <Icon className="size-4 shrink-0" />
+              {!collapsed && label}
             </NavLink>
           ))}
         </nav>
@@ -121,25 +147,33 @@ function AppShellLayout() {
 
       {/* Main */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b border-border px-6">
-          <h1 className="text-lg font-semibold">{title}</h1>
+        <header className="flex h-14 items-center justify-between border-b border-border px-4 sm:px-6">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden md:inline-flex"
+              aria-label={collapsed ? 'Yon panelni ochish' : 'Yon panelni yig‘ish'}
+              onClick={toggleCollapsed}
+            >
+              <PanelLeft />
+            </Button>
+            <h1 className="text-lg font-semibold">{title}</h1>
+          </div>
           <div className="flex items-center gap-2">
             <Button size="sm" onClick={() => openEditor()}>
               <Plus />
               Yangi hisobot
             </Button>
             <ThemeToggle />
-            <div className="flex items-center gap-2 pl-1">
-              <div
-                className="grid size-8 place-items-center rounded-full bg-primary/15 text-sm font-medium text-primary"
-                title={user?.firstName ?? user?.username ?? ''}
-              >
-                {initial}
-              </div>
-              <Button variant="ghost" size="icon" aria-label="Chiqish" onClick={() => logout()}>
-                <LogOut />
-              </Button>
-            </div>
+            <NavLink
+              to="/profile"
+              title="Profil"
+              aria-label="Profil"
+              className="rounded-full ring-offset-background transition hover:ring-2 hover:ring-ring hover:ring-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <UserAvatar user={user} className="size-8 text-sm" />
+            </NavLink>
           </div>
         </header>
         <main className="flex-1 overflow-auto p-6">

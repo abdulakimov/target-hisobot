@@ -10,6 +10,13 @@ export interface MeResponse {
   dmEnabled: boolean;
 }
 
+/** PATCH /api/me — fields the user may edit on their own profile. */
+export interface UpdateMeInput {
+  firstName?: string | null;
+  lastName?: string | null;
+  timezone?: string;
+}
+
 /** POST /api/auth/telegram/start — begins a bot deep-link login. */
 export interface TelegramStartResponse {
   token: string;

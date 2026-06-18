@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnApplicationShutdown, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { Bot } from 'grammy';
+import { Bot, type Api } from 'grammy';
 import type { BotStatus } from '@prisma/client';
 import type { AppConfig } from '../common/config/env.validation';
 import { UsersService } from '../users/users.service';
@@ -90,6 +90,7 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
           first_name: ctx.from?.first_name,
           last_name: ctx.from?.last_name,
           username: ctx.from?.username,
+          photo_url: await this.fetchProfilePhotoDataUrl(ctx.api, telegramId),
         });
         await ctx.reply(
           ok
@@ -146,5 +147,33 @@ export class TelegramBotService implements OnModuleInit, OnApplicationShutdown {
   /** Exposed for the report Sender (M5) and DM alerts (M6). */
   getBot(): Bot | undefined {
     return this.bot;
+  }
+
+  /**
+   * Fetch the user's Telegram profile photo and return it as a `data:` URL so it can be
+   * stored on the User and shown in the dashboard. The bytes are downloaded server-side —
+   * the bot token never leaves the backend (the raw file URL embeds it). Returns null on
+   * any failure (no photo, fetch error, oversized) so login is never blocked.
+   */
+  private async fetchProfilePhotoDataUrl(api: Api, userId: number): Promise<string | null> {
+    try {
+      const result = await api.getUserProfilePhotos(userId, { limit: 1 });
+      const sizes = result.photos[0];
+      if (!sizes?.length) return null;
+      // Sizes are ascending; an avatar only needs ~160px. Fall back to the largest available.
+      const chosen = sizes.find((s) => s.width >= 160) ?? sizes[sizes.length - 1];
+      const file = await api.getFile(chosen.file_id);
+      if (!file.file_path) return null;
+      const token = this.config.get('TELEGRAM_BOT_TOKEN', { infer: true });
+      const res = await fetch(`https://api.telegram.org/file/bot${token}/${file.file_path}`);
+      if (!res.ok) return null;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length > 256 * 1024) return null; // avatars are tiny; guard the row / /me payload
+      const mime = /\.png$/i.test(file.file_path) ? 'image/png' : 'image/jpeg';
+      return `data:${mime};base64,${buf.toString('base64')}`;
+    } catch (err) {
+      this.logger.warn(`Failed to fetch Telegram profile photo: ${String(err)}`);
+      return null;
+    }
   }
 }

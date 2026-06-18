@@ -12,6 +12,7 @@ import { DashboardPage } from '@/routes/dashboard';
 import { GroupsPage } from '@/routes/groups';
 import { ConnectionsPage } from '@/routes/connections';
 import { HistoryPage } from '@/routes/history';
+import { ProfilePage } from '@/routes/profile';
 import { PlaceholderPage } from '@/routes/placeholder';
 import '@/index.css';
 
@@ -45,6 +46,7 @@ const router = createBrowserRouter([
           { path: '/groups', element: <GroupsPage /> },
           { path: '/connections', element: <ConnectionsPage /> },
           { path: '/history', element: <HistoryPage /> },
+          { path: '/profile', element: <ProfilePage /> },
           { path: '/settings', element: <PlaceholderPage title="Sozlamalar" /> },
         ],
       },

@@ -38,6 +38,21 @@ export class UsersService {
     });
   }
 
+  /** Update the user-editable profile fields. Empty name → null; omitted field → unchanged. */
+  async updateProfile(
+    userId: string,
+    data: { firstName?: string | null; lastName?: string | null; timezone?: string },
+  ): Promise<User> {
+    return this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        firstName: data.firstName === undefined ? undefined : data.firstName?.trim() || null,
+        lastName: data.lastName === undefined ? undefined : data.lastName?.trim() || null,
+        timezone: data.timezone ?? undefined,
+      },
+    });
+  }
+
   /** Toggle DM capability when the user starts the bot privately. Returns true if a user matched. */
   async setDmEnabled(telegramUserId: bigint, enabled: boolean): Promise<boolean> {
     const res = await this.prisma.user.updateMany({
