@@ -1,5 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { resilientFetch } from '../common/http/resilient-fetch';
 import type { AppConfig } from '../common/config/env.validation';
 import type { RawInsights } from './insights-parse';
 
@@ -20,6 +21,8 @@ export interface MetaAdAccountRaw {
 /** Low-level Meta Graph API client (OAuth token exchange + ad accounts + insights). */
 @Injectable()
 export class MetaGraphService {
+  private readonly logger = new Logger(MetaGraphService.name);
+
   constructor(private readonly config: ConfigService<AppConfig, true>) {}
 
   isConfigured(): boolean {
@@ -53,9 +56,19 @@ export class MetaGraphService {
   private async getJson(url: string, context: string): Promise<Record<string, unknown>> {
     let res: Awaited<ReturnType<typeof fetch>>;
     try {
-      res = await fetch(url);
+      res = await resilientFetch(url, {
+        onRetry: ({ attempt, status, error, delayMs }) =>
+          this.logger.warn(
+            `Meta ${context} retry #${attempt + 1} in ${delayMs}ms (${status ?? (error as Error)?.message})`,
+          ),
+      });
     } catch (e) {
-      throw new Error(`Meta ${context} failed: tarmoq xatosi (${(e as Error).message})`);
+      const err = e as Error;
+      const reason =
+        err.name === 'AbortError'
+          ? "so'rov vaqti tugadi (timeout)"
+          : `tarmoq xatosi (${err.message})`;
+      throw new Error(`Meta ${context} failed: ${reason}`);
     }
     const data = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     if (!res.ok) {
@@ -71,6 +84,16 @@ export class MetaGraphService {
     return data;
   }
 
+  /** Validate + shape a Meta token response (guards against a malformed/empty access_token). */
+  private toTokenResult(data: Record<string, unknown>, context: string): MetaTokenResult {
+    const token = data.access_token;
+    if (typeof token !== 'string' || token.length === 0) {
+      throw new Error(`Meta ${context} failed: javobda access_token yo'q`);
+    }
+    const expiresIn = data.expires_in;
+    return { accessToken: token, expiresInSec: typeof expiresIn === 'number' ? expiresIn : null };
+  }
+
   /** code → short-lived access token. */
   async exchangeCode(code: string): Promise<MetaTokenResult> {
     const params = new URLSearchParams({
@@ -80,7 +103,7 @@ export class MetaGraphService {
       code,
     });
     const data = await this.getJson(this.graph(`/oauth/access_token?${params}`), 'code exchange');
-    return { accessToken: data.access_token as string, expiresInSec: (data.expires_in as number) ?? null };
+    return this.toTokenResult(data, 'code exchange');
   }
 
   /** short-lived → long-lived (~60 day) token. */
@@ -92,7 +115,7 @@ export class MetaGraphService {
       fb_exchange_token: shortToken,
     });
     const data = await this.getJson(this.graph(`/oauth/access_token?${params}`), 'long-lived exchange');
-    return { accessToken: data.access_token as string, expiresInSec: (data.expires_in as number) ?? null };
+    return this.toTokenResult(data, 'long-lived exchange');
   }
 
   async getMe(token: string): Promise<{ id: string }> {
@@ -100,7 +123,10 @@ export class MetaGraphService {
       this.graph(`/me?fields=id&access_token=${encodeURIComponent(token)}`),
       'me',
     );
-    return { id: data.id as string };
+    if (typeof data.id !== 'string' || data.id.length === 0) {
+      throw new Error("Meta me failed: javobda foydalanuvchi id yo'q");
+    }
+    return { id: data.id };
   }
 
   /** All ad accounts the user can access (follows pagination). */

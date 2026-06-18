@@ -10,3 +10,4 @@ export * from './groups.js';
 export * from './reports.js';
 export * from './report-runs.js';
 export * from './meta.js';
+export * from './i18n/locales.js';

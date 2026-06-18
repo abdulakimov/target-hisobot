@@ -1,0 +1,10 @@
+{
+  "app": { "name": "Hisobotchi" },
+  "nav": {
+    "reports": "Отчёты",
+    "groups": "Группы",
+    "connections": "Подключения",
+    "history": "История",
+    "settings": "Настройки"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "app": { "name": "Hisobotchi" },
+  "nav": {
+    "reports": "Reports",
+    "groups": "Groups",
+    "connections": "Connections",
+    "history": "History",
+    "settings": "Settings"
+  }
+}

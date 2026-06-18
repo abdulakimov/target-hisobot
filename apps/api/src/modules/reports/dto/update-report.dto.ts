@@ -1,5 +1,7 @@
 import {
+  ArrayMaxSize,
   ArrayNotEmpty,
+  ArrayUnique,
   IsArray,
   IsBoolean,
   IsIn,
@@ -12,6 +14,7 @@ import {
   Min,
 } from 'class-validator';
 import { METRIC_KEYS, WINDOW_PRESETS, type MetricKey, type WindowPreset } from '@hisobotchi/shared';
+import { IsTimeZone } from '../../common/validation/is-timezone.validator';
 
 const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -31,6 +34,8 @@ export class UpdateReportDto {
   @IsOptional()
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayUnique()
+  @ArrayMaxSize(METRIC_KEYS.length)
   @IsIn([...METRIC_KEYS], { each: true })
   metrics?: MetricKey[];
 
@@ -43,18 +48,22 @@ export class UpdateReportDto {
   windowPreset?: WindowPreset;
 
   @IsOptional()
-  @IsString()
+  @IsTimeZone()
   timezone?: string;
 
   @IsOptional()
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayUnique()
+  @ArrayMaxSize(24)
   @Matches(HHMM, { each: true })
   sendTimes?: string[];
 
   @IsOptional()
   @IsArray()
   @ArrayNotEmpty()
+  @ArrayUnique()
+  @ArrayMaxSize(7)
   @IsInt({ each: true })
   @Min(1, { each: true })
   @Max(7, { each: true })

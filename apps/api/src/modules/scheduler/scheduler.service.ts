@@ -2,7 +2,11 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { isDue } from '@hisobotchi/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { mapWithConcurrency } from '../common/async/concurrency';
 import { ReportDispatcherService } from './report-dispatcher.service';
+
+/** Max reports dispatched in parallel per tick (bounds Meta/Telegram load). */
+const DISPATCH_CONCURRENCY = 5;
 
 /**
  * Per-minute scheduler tick (PLAN sec 6). Loads enabled reports, selects the ones due in
@@ -12,6 +16,7 @@ import { ReportDispatcherService } from './report-dispatcher.service';
 @Injectable()
 export class SchedulerService {
   private readonly logger = new Logger(SchedulerService.name);
+  private ticking = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -20,31 +25,45 @@ export class SchedulerService {
 
   @Cron(CronExpression.EVERY_MINUTE)
   async tick(): Promise<void> {
-    const now = new Date();
-    // Truncate to the minute (UTC) so the dedupe key is stable within the tick.
-    const scheduledFor = new Date(Math.floor(now.getTime() / 60000) * 60000);
+    // Skip if a previous tick is still running so slow Meta/Telegram calls can't pile up
+    // ticks. The (report_id, scheduled_for) dedupe + A3b catch-up cover any skipped minute.
+    if (this.ticking) {
+      this.logger.warn('previous tick still running — skipping this minute');
+      return;
+    }
+    this.ticking = true;
+    try {
+      const now = new Date();
+      // Truncate to the minute (UTC) so the dedupe key is stable within the tick.
+      const scheduledFor = new Date(Math.floor(now.getTime() / 60000) * 60000);
 
-    const reports = await this.prisma.report.findMany({
-      where: { enabled: true },
-      include: {
-        adAccount: true,
-        telegramGroup: true,
-        user: { select: { telegramUserId: true } },
-      },
-    });
+      const reports = await this.prisma.report.findMany({
+        where: { enabled: true },
+        include: {
+          adAccount: true,
+          telegramGroup: true,
+          user: { select: { telegramUserId: true } },
+        },
+      });
 
-    const due = reports.filter((r) =>
-      isDue({ timezone: r.timezone, sendTimes: toSendTimes(r.sendTimes), weekdays: r.weekdays }, now),
-    );
-    if (due.length === 0) return;
+      const due = reports.filter((r) =>
+        isDue(
+          { timezone: r.timezone, sendTimes: toSendTimes(r.sendTimes), weekdays: r.weekdays },
+          now,
+        ),
+      );
+      if (due.length === 0) return;
 
-    this.logger.log(`${due.length} report(s) due — dispatching`);
-    for (const report of due) {
-      try {
-        await this.dispatcher.dispatch(report, scheduledFor);
-      } catch (err) {
-        this.logger.error(`dispatch failed for report ${report.id}: ${String(err)}`);
-      }
+      this.logger.log(`${due.length} report(s) due — dispatching (concurrency ${DISPATCH_CONCURRENCY})`);
+      await mapWithConcurrency(due, DISPATCH_CONCURRENCY, async (report) => {
+        try {
+          await this.dispatcher.dispatch(report, scheduledFor);
+        } catch (err) {
+          this.logger.error(`dispatch failed for report ${report.id}: ${String(err)}`);
+        }
+      });
+    } finally {
+      this.ticking = false;
     }
   }
 }

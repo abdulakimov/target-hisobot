@@ -1,0 +1,10 @@
+{
+  "app": { "name": "Hisobotchi" },
+  "nav": {
+    "reports": "Hisobotlar",
+    "groups": "Guruhlar",
+    "connections": "Ulanishlar",
+    "history": "Tarix",
+    "settings": "Sozlamalar"
+  }
+}
