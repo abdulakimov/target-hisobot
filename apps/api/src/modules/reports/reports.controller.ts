@@ -1,7 +1,8 @@
-import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, HttpCode, Param, Patch, Post, UseGuards } from '@nestjs/common';
 import type { User } from '@prisma/client';
 import type { ReportFormOptions, ReportResponse, TestSendResponse } from '@hisobotchi/shared';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { SubscriptionGuard } from '../access/guards/subscription.guard';
 import { ReportsService } from './reports.service';
 import { CreateReportDto } from './dto/create-report.dto';
 import { UpdateReportDto } from './dto/update-report.dto';
@@ -23,6 +24,7 @@ export class ReportsController {
 
   @Post()
   @HttpCode(201)
+  @UseGuards(SubscriptionGuard)
   create(@CurrentUser() user: User, @Body() dto: CreateReportDto): Promise<ReportResponse> {
     return this.reports.create(user.id, dto);
   }
@@ -33,6 +35,7 @@ export class ReportsController {
   }
 
   @Patch(':id')
+  @UseGuards(SubscriptionGuard)
   update(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -43,12 +46,14 @@ export class ReportsController {
 
   @Delete(':id')
   @HttpCode(204)
+  @UseGuards(SubscriptionGuard)
   remove(@CurrentUser() user: User, @Param('id') id: string): Promise<void> {
     return this.reports.remove(user.id, id);
   }
 
   @Post(':id/test-send')
   @HttpCode(200)
+  @UseGuards(SubscriptionGuard)
   testSend(@CurrentUser() user: User, @Param('id') id: string): Promise<TestSendResponse> {
     return this.reports.testSend(user.id, id);
   }

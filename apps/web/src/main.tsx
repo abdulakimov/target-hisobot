@@ -13,6 +13,9 @@ import { GroupsPage } from '@/routes/groups';
 import { ConnectionsPage } from '@/routes/connections';
 import { HistoryPage } from '@/routes/history';
 import { ProfilePage } from '@/routes/profile';
+import { AdminPage } from '@/routes/admin';
+import { PaywallPage } from '@/routes/paywall';
+import { RequireAccess } from '@/components/RequireAccess';
 import { PlaceholderPage } from '@/routes/placeholder';
 import '@/index.css';
 
@@ -39,15 +42,23 @@ const router = createBrowserRouter([
   {
     element: <RequireAuth />,
     children: [
+      // Paywall is reachable while logged in but locked (outside RequireAccess).
+      { path: '/paywall', element: <PaywallPage /> },
       {
-        element: <AppShell />,
+        element: <RequireAccess />,
         children: [
-          { path: '/', element: <DashboardPage /> },
-          { path: '/groups', element: <GroupsPage /> },
-          { path: '/connections', element: <ConnectionsPage /> },
-          { path: '/history', element: <HistoryPage /> },
-          { path: '/profile', element: <ProfilePage /> },
-          { path: '/settings', element: <PlaceholderPage title="Sozlamalar" /> },
+          {
+            element: <AppShell />,
+            children: [
+              { path: '/', element: <DashboardPage /> },
+              { path: '/groups', element: <GroupsPage /> },
+              { path: '/connections', element: <ConnectionsPage /> },
+              { path: '/history', element: <HistoryPage /> },
+              { path: '/profile', element: <ProfilePage /> },
+              { path: '/admin', element: <AdminPage /> },
+              { path: '/settings', element: <PlaceholderPage title="Sozlamalar" /> },
+            ],
+          },
         ],
       },
     ],

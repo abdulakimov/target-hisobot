@@ -8,6 +8,12 @@ export interface MeResponse {
   photoUrl: string | null;
   timezone: string;
   dmEnabled: boolean;
+  /** Platform owner — bypasses the paywall (set via SUPERADMIN_TELEGRAM_IDS). */
+  isSuperadmin: boolean;
+  /** True while the subscription is unexpired (or superadmin). Gates the whole app. */
+  accessActive: boolean;
+  /** Subscription expiry (ISO) or null if never activated. */
+  accessExpiresAt: string | null;
 }
 
 /** PATCH /api/me — fields the user may edit on their own profile. */

@@ -26,12 +26,15 @@ export class AllExceptionsFilter implements ExceptionFilter {
     const status = isHttp ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
 
     let message: string | string[] = 'Ichki server xatosi';
+    let code: string | undefined;
     if (isHttp) {
       const body = exception.getResponse();
       if (typeof body === 'string') {
         message = body;
       } else {
-        message = (body as { message?: string | string[] }).message ?? exception.message;
+        const obj = body as { message?: string | string[]; code?: string };
+        message = obj.message ?? exception.message;
+        code = obj.code;
       }
     }
 
@@ -49,6 +52,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error: isHttp ? exception.name : 'InternalServerError',
       // Never expose internal error details on 5xx.
       message: status >= HttpStatus.INTERNAL_SERVER_ERROR ? 'Ichki server xatosi' : message,
+      ...(code ? { code } : {}),
     });
   }
 }

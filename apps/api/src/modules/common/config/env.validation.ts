@@ -33,6 +33,10 @@ export const envSchema = z.object({
     .min(32, 'META_TOKEN_ENCRYPTION_KEY must be at least 32 characters'),
   META_GRAPH_API_VERSION: z.string().default('v23.0'),
   META_OAUTH_SCOPES: z.string().default('ads_read,business_management'),
+
+  // Comma-separated Telegram user IDs that are platform superadmins (bypass the paywall,
+  // can open the admin panel). Empty = no superadmins.
+  SUPERADMIN_TELEGRAM_IDS: z.string().default(''),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

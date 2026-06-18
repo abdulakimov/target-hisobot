@@ -3,6 +3,7 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { isDue } from '@hisobotchi/shared';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { mapWithConcurrency } from '../common/async/concurrency';
+import { AccessService } from '../access/access.service';
 import { ReportDispatcherService } from './report-dispatcher.service';
 
 /** Max reports dispatched in parallel per tick (bounds Meta/Telegram load). */
@@ -21,6 +22,7 @@ export class SchedulerService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly dispatcher: ReportDispatcherService,
+    private readonly access: AccessService,
   ) {}
 
   @Cron(CronExpression.EVERY_MINUTE)
@@ -42,15 +44,18 @@ export class SchedulerService {
         include: {
           adAccount: true,
           telegramGroup: true,
-          user: { select: { telegramUserId: true } },
+          user: { select: { telegramUserId: true, accessExpiresAt: true } },
         },
       });
 
-      const due = reports.filter((r) =>
-        isDue(
-          { timezone: r.timezone, sendTimes: toSendTimes(r.sendTimes), weekdays: r.weekdays },
-          now,
-        ),
+      // Only dispatch for users with active access (paywall) — superadmins bypass.
+      const due = reports.filter(
+        (r) =>
+          this.access.hasActiveAccess(r.user, now) &&
+          isDue(
+            { timezone: r.timezone, sendTimes: toSendTimes(r.sendTimes), weekdays: r.weekdays },
+            now,
+          ),
       );
       if (due.length === 0) return;
 

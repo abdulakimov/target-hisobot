@@ -10,6 +10,7 @@ import {
   Query,
   Req,
   Res,
+  UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Request, Response, CookieOptions } from 'express';
@@ -22,6 +23,7 @@ import type {
 } from '@hisobotchi/shared';
 import type { AppConfig } from '../common/config/env.validation';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { SubscriptionGuard } from '../access/guards/subscription.guard';
 import { MetaService } from './meta.service';
 import { MetaGraphService } from './meta-graph.service';
 import { UpdateAdAccountDto } from './dto/update-ad-account.dto';
@@ -54,6 +56,7 @@ export class MetaController {
 
   // GET /api/meta/connect — start OAuth (top-level redirect to Facebook).
   @Get('connect')
+  @UseGuards(SubscriptionGuard)
   connect(@CurrentUser() _user: User, @Res({ passthrough: true }) res: Response): void {
     if (!this.graph.isConfigured()) {
       res.redirect(`${this.frontend}/connections?meta=unconfigured`);
@@ -104,6 +107,7 @@ export class MetaController {
 
   // POST /api/meta/sync — re-sync ad accounts for the existing connection.
   @Post('sync')
+  @UseGuards(SubscriptionGuard)
   async sync(@CurrentUser() user: User): Promise<MetaSyncResponse> {
     const accountCount = await this.meta.resync(user.id);
     return { accountCount };
@@ -125,6 +129,7 @@ export class MetaController {
   }
 
   @Patch('ad-accounts/:id')
+  @UseGuards(SubscriptionGuard)
   async update(
     @CurrentUser() user: User,
     @Param('id') id: string,
@@ -135,6 +140,7 @@ export class MetaController {
   }
 
   @Delete('connection')
+  @UseGuards(SubscriptionGuard)
   async disconnect(@CurrentUser() user: User): Promise<{ ok: true }> {
     await this.meta.disconnect(user.id);
     return { ok: true };

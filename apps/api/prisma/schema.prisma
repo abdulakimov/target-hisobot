@@ -48,6 +48,12 @@ model User {
   createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   lastLoginAt    DateTime? @map("last_login_at") @db.Timestamptz(6)
 
+  // Manual-activation paywall: accessExpiresAt is the single runtime gate (PLAN: superadmin + paywall).
+  accessExpiresAt     DateTime? @map("access_expires_at") @db.Timestamptz(6)
+  accessGrantedAt     DateTime? @map("access_granted_at") @db.Timestamptz(6)
+  accessGrantedByTgId BigInt?   @map("access_granted_by_tg_id")
+  accessNote          String?   @map("access_note")
+
   sessions        Session[]
   metaConnections MetaConnection[]
   adAccounts      AdAccount[]
@@ -56,8 +62,32 @@ model User {
   loginTokens     LoginToken[]
   reports         Report[]
   reportRuns      ReportRun[]
+  accessGrants    AccessGrant[]
 
   @@map("users")
+}
+
+// Append-only audit of access grants/revokes. Source 'manual' now; future payment
+// webhooks (Payme/Click) write the same shape with source/externalRef/amount set.
+model AccessGrant {
+  id                String    @id @default(uuid()) @db.Uuid
+  userId            String    @map("user_id") @db.Uuid
+  action            String // 'grant' | 'revoke'
+  source            String    @default("manual")
+  days              Int?
+  previousExpiresAt DateTime? @map("previous_expires_at") @db.Timestamptz(6)
+  newExpiresAt      DateTime? @map("new_expires_at") @db.Timestamptz(6)
+  grantedByTgId     BigInt?   @map("granted_by_tg_id")
+  note              String?
+  externalRef       String?   @map("external_ref")
+  amount            Int?
+  currency          String?
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("access_grants")
 }
 
 model Session {

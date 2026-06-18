@@ -15,6 +15,7 @@ import { GroupsModule } from './modules/groups/groups.module';
 import { ReportsModule } from './modules/reports/reports.module';
 import { SchedulerModule } from './modules/scheduler/scheduler.module';
 import { ReportRunsModule } from './modules/report-runs/report-runs.module';
+import { AdminModule } from './modules/admin/admin.module';
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { ReportRunsModule } from './modules/report-runs/report-runs.module';
     GroupsModule,
     ReportsModule,
     ReportRunsModule,
+    AdminModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

@@ -17,7 +17,7 @@ import { InsightsService, MetaNotConnectedError } from '../meta/insights.service
 export type DueReport = Report & {
   adAccount: AdAccount;
   telegramGroup: TelegramGroup;
-  user: Pick<User, 'telegramUserId'>;
+  user: Pick<User, 'telegramUserId' | 'accessExpiresAt'>;
 };
 
 /**

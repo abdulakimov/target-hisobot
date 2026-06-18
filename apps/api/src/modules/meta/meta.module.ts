@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AccessModule } from '../access/access.module';
 import { MetaController } from './meta.controller';
 import { MetaService } from './meta.service';
 import { MetaGraphService } from './meta-graph.service';
@@ -10,6 +11,7 @@ import { MetaMaintenanceService } from './meta-maintenance.service';
 // daily token-refresh maintenance (MetaMaintenanceService).
 // M5: InsightsService (exported) feeds the scheduler's report dispatcher.
 @Module({
+  imports: [AccessModule],
   controllers: [MetaController],
   providers: [MetaService, MetaGraphService, InsightsService, MetaMaintenanceService],
   exports: [InsightsService],

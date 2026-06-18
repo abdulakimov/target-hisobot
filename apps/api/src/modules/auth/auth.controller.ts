@@ -8,6 +8,7 @@ import type {
 } from '@hisobotchi/shared';
 import type { AppConfig } from '../common/config/env.validation';
 import { UsersService } from '../users/users.service';
+import { AccessService } from '../access/access.service';
 import { SESSION_COOKIE, SESSION_TTL_MS, SessionService } from './session.service';
 import { LOGIN_PAYLOAD_PREFIX, LoginTokenService } from './login-token.service';
 import { Public } from './decorators/public.decorator';
@@ -20,6 +21,7 @@ export class AuthController {
     private readonly users: UsersService,
     private readonly sessions: SessionService,
     private readonly loginTokens: LoginTokenService,
+    private readonly access: AccessService,
   ) {}
 
   private cookieOptions(): CookieOptions {
@@ -67,7 +69,7 @@ export class AuthController {
     });
     res.cookie(SESSION_COOKIE, sessionToken, { ...this.cookieOptions(), maxAge: SESSION_TTL_MS });
     const user = await this.users.findById(result.userId);
-    return { status: 'ok', user: toMeResponse(user!) };
+    return { status: 'ok', user: toMeResponse(user!, this.access.computeAccess(user!)) };
   }
 
   @Post('logout')

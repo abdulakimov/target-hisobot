@@ -12,6 +12,7 @@ import {
   Plus,
   PanelLeft,
   Bell,
+  ShieldCheck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ const TITLES: Record<string, string> = {
   '/connections': 'Ulanishlar',
   '/history': 'Tarix',
   '/profile': 'Profil',
+  '/admin': 'Admin',
   '/settings': 'Sozlamalar',
 };
 
@@ -92,6 +94,9 @@ function AppShellLayout() {
   const { user } = useAuth();
   const { openEditor } = useReportEditor();
   const title = TITLES[pathname] ?? 'Hisobotchi';
+  const nav = user?.isSuperadmin
+    ? [...NAV, { to: '/admin', label: 'Admin', icon: ShieldCheck, end: false }]
+    : NAV;
 
   const [collapsed, setCollapsed] = useState(
     () => typeof window !== 'undefined' && localStorage.getItem(COLLAPSE_KEY) === '1',
@@ -122,7 +127,7 @@ function AppShellLayout() {
           {!collapsed && 'Hisobotchi'}
         </div>
         <nav className={cn('flex flex-1 flex-col gap-1 py-2', collapsed ? 'px-2' : 'px-3')}>
-          {NAV.map(({ to, label, icon: Icon, end }) => (
+          {nav.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}

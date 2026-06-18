@@ -2,6 +2,8 @@ export * from './metrics.js';
 export * from './enums.js';
 export * from './lead-actions.js';
 export * from './auth.js';
+export * from './access.js';
+export * from './admin.js';
 export * from './format.js';
 export * from './report-message.js';
 export * from './schedule.js';
